@@ -64,8 +64,17 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Setup .NET with GitHub Packages auth
+      if: ${{ inputs.setup-dotnet == 'true' && startsWith(inputs.nuget-source, 'https://nuget.pkg.github.com/') }}
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ inputs.dotnet-version }}
+        source-url: ${{ inputs.nuget-source }}
+      env:
+        NUGET_AUTH_TOKEN: ${{ github.token }}
+
     - name: Setup .NET
-      if: ${{ inputs.setup-dotnet == 'true' }}
+      if: ${{ inputs.setup-dotnet == 'true' && !startsWith(inputs.nuget-source, 'https://nuget.pkg.github.com/') }}
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ inputs.dotnet-version }}
