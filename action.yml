@@ -258,7 +258,7 @@ runs:
         file_count=$(find "$destination" -type f | wc -l | tr -d ' ')
         echo "Generated files: $file_count"
         echo "Sample output files:"
-        find "$destination" -type f | sort | head -25
+        find "$destination" -type f | sort | sed -n '1,25p'
 
     - name: Upload site artifact
       if: ${{ inputs.upload-artifact == 'true' }}
