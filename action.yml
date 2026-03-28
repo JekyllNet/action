@@ -59,6 +59,10 @@ inputs:
     description: Cache NuGet packages and the global JekyllNet tool between workflow runs.
     required: false
     default: "true"
+  verbose:
+    description: Request verbose JekyllNet build logs when the installed tool version supports them.
+    required: false
+    default: "true"
   upload-artifact:
     description: Upload the generated destination directory as a workflow artifact.
     required: false
@@ -199,6 +203,19 @@ runs:
 
         dotnet "${args[@]}"
 
+    - name: Show JekyllNet tool info
+      shell: bash
+      run: |
+        tool_version="$(jekyllnet --version 2>/dev/null || true)"
+        if [ -n "$tool_version" ]; then
+          echo "JekyllNet CLI version: $tool_version"
+        else
+          echo "JekyllNet CLI version: unavailable"
+        fi
+
+        echo "JekyllNet docs: https://jekyllnet.help/"
+        echo "JekyllNet repo: https://github.com/JekyllNet/JekyllNet"
+
     - name: Build site
       id: build
       shell: bash
@@ -217,7 +234,31 @@ runs:
           args+=(--posts-per-page "${{ inputs.posts-per-page }}")
         fi
 
+        if [ "${{ inputs.verbose }}" = "true" ]; then
+          if jekyllnet build --help 2>/dev/null | grep -Fq -- "--verbose"; then
+            args+=(--verbose)
+          else
+            echo "::notice::Installed JekyllNet tool does not support --verbose yet; continuing with standard logs."
+          fi
+        fi
+
         jekyllnet "${args[@]}"
+
+    - name: Summarize generated site
+      shell: bash
+      run: |
+        destination="${{ steps.build.outputs.destination }}"
+        echo "Generated site output: $destination"
+
+        if [ ! -d "$destination" ]; then
+          echo "::error::Expected build destination does not exist: $destination"
+          exit 1
+        fi
+
+        file_count=$(find "$destination" -type f | wc -l | tr -d ' ')
+        echo "Generated files: $file_count"
+        echo "Sample output files:"
+        find "$destination" -type f | sort | head -25
 
     - name: Upload site artifact
       if: ${{ inputs.upload-artifact == 'true' }}

@@ -31,6 +31,7 @@ jobs:
         with:
           source: ./docs
           destination: ./artifacts/docs-site
+          verbose: "true"
           upload-artifact: "true"
           artifact-name: docs-site
 ```
@@ -68,6 +69,7 @@ jobs:
 - `dotnet-version`
 - `setup-dotnet`
 - `cache`
+- `verbose`
 - `upload-artifact`
 - `artifact-name`
 
@@ -78,6 +80,9 @@ jobs:
 - The cache is enabled by default and stores NuGet packages plus the installed global tool between workflow runs.
 - If `tool-version` is pinned, an exact cache hit skips tool installation entirely.
 - If `tool-version` is empty, the action still checks for the latest version, but it restores package caches first to reduce repeated downloads.
+- `verbose` defaults to `true`. When the installed JekyllNet tool supports `--verbose`, the action enables richer per-file build logging automatically.
+- If the installed JekyllNet tool is older and does not support `--verbose`, the action logs a notice and continues without failing the workflow.
+- After each build, the action prints the destination path, generated file count, and a short sample file list so workflow logs make it obvious that output was produced.
 - `nuget-auth-token` and `nuget-username` are only needed for authenticated feeds such as GitHub Packages.
 - When `nuget-source` points to GitHub Packages and `nuget-auth-token` is empty, the action falls back to `github.token`.
 - For cross-repository GitHub Packages installs, a PAT or fine-grained token with package read access is usually safer than the default workflow token.
