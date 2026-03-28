@@ -1,6 +1,10 @@
-name: JekyllNet Build
+name: JekyllNet
 description: Install the JekyllNet dotnet tool from NuGet and build a Jekyll-style static site.
 author: JekyllNet
+
+branding:
+  icon: book-open
+  color: blue
 
 inputs:
   source:
@@ -34,7 +38,7 @@ inputs:
   nuget-source:
     description: NuGet feed used to install the JekyllNet dotnet tool.
     required: false
-    default: https://api.nuget.org/v3/index.json
+    default: https://nuget.pkg.github.com/JekyllNet/index.json
   dotnet-version:
     description: .NET SDK version to install before running the action.
     required: false
