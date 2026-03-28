@@ -38,13 +38,25 @@ inputs:
   nuget-source:
     description: NuGet feed used to install the JekyllNet dotnet tool.
     required: false
-    default: https://nuget.pkg.github.com/JekyllNet/index.json
+    default: https://api.nuget.org/v3/index.json
+  nuget-auth-token:
+    description: Optional auth token for authenticated NuGet feeds. GitHub Packages falls back to github.token when this input is empty.
+    required: false
+    default: ""
+  nuget-username:
+    description: Optional username for authenticated NuGet feeds. GitHub Packages falls back to github.actor when this input is empty.
+    required: false
+    default: ""
   dotnet-version:
     description: .NET SDK version to install before running the action.
     required: false
     default: 10.0.x
   setup-dotnet:
     description: Install the configured .NET SDK before running JekyllNet.
+    required: false
+    default: "true"
+  cache:
+    description: Cache NuGet packages and the global JekyllNet tool between workflow runs.
     required: false
     default: "true"
   upload-artifact:
@@ -64,32 +76,121 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Setup .NET with GitHub Packages auth
-      if: ${{ inputs.setup-dotnet == 'true' && startsWith(inputs.nuget-source, 'https://nuget.pkg.github.com/') }}
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ inputs.dotnet-version }}
-        source-url: ${{ inputs.nuget-source }}
-      env:
-        NUGET_AUTH_TOKEN: ${{ github.token }}
-
     - name: Setup .NET
-      if: ${{ inputs.setup-dotnet == 'true' && !startsWith(inputs.nuget-source, 'https://nuget.pkg.github.com/') }}
-      uses: actions/setup-dotnet@v4
+      if: ${{ inputs.setup-dotnet == 'true' }}
+      uses: actions/setup-dotnet@v5
       with:
         dotnet-version: ${{ inputs.dotnet-version }}
+
+    - name: Add .NET tools to PATH
+      shell: bash
+      run: echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+    - name: Resolve JekyllNet cache key
+      if: ${{ inputs.cache == 'true' }}
+      id: cache-key
+      shell: bash
+      env:
+        INPUT_DOTNET_VERSION: ${{ inputs.dotnet-version }}
+        INPUT_TOOL_VERSION: ${{ inputs.tool-version }}
+        INPUT_NUGET_SOURCE: ${{ inputs.nuget-source }}
+      run: |
+        runner_os=$(printf '%s' "$RUNNER_OS" | tr '[:upper:]' '[:lower:]')
+        runner_arch=$(printf '%s' "$RUNNER_ARCH" | tr '[:upper:]' '[:lower:]')
+
+        if command -v sha256sum >/dev/null 2>&1; then
+          source_hash=$(printf '%s' "$INPUT_NUGET_SOURCE" | sha256sum | awk '{ print substr($1, 1, 16) }')
+        else
+          source_hash=$(printf '%s' "$INPUT_NUGET_SOURCE" | shasum -a 256 | awk '{ print substr($1, 1, 16) }')
+        fi
+
+        cache_prefix="$runner_os-$runner_arch-jekyllnet-tool-$INPUT_DOTNET_VERSION-$source_hash"
+
+        if [ -n "$INPUT_TOOL_VERSION" ]; then
+          primary_key="$cache_prefix-version-$INPUT_TOOL_VERSION"
+          restore_key=""
+          can_skip_install=true
+        else
+          cache_day=$(date -u +%Y%m%d)
+          primary_key="$cache_prefix-floating-$cache_day"
+          restore_key="$cache_prefix-floating-"
+          can_skip_install=false
+        fi
+
+        echo "primary_key=$primary_key" >> "$GITHUB_OUTPUT"
+        echo "restore_key=$restore_key" >> "$GITHUB_OUTPUT"
+        echo "can_skip_install=$can_skip_install" >> "$GITHUB_OUTPUT"
+
+    - name: Cache JekyllNet tool
+      if: ${{ inputs.cache == 'true' }}
+      id: tool-cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.nuget/packages
+          ~/.dotnet/tools
+          ~/.dotnet/toolResolverCache
+          ~/.local/share/NuGet/v3-cache
+          ~/AppData/Local/NuGet/v3-cache
+        key: ${{ steps.cache-key.outputs.primary_key }}
+        restore-keys: ${{ steps.cache-key.outputs.restore_key }}
 
     - name: Install JekyllNet dotnet tool
+      if: ${{ inputs.cache != 'true' || steps.cache-key.outputs.can_skip_install != 'true' || steps.tool-cache.outputs.cache-hit != 'true' }}
       shell: bash
+      env:
+        INPUT_NUGET_AUTH_TOKEN: ${{ inputs.nuget-auth-token }}
+        INPUT_NUGET_USERNAME: ${{ inputs.nuget-username }}
+        GITHUB_TOKEN_FALLBACK: ${{ github.token }}
+        GITHUB_ACTOR_FALLBACK: ${{ github.actor }}
       run: |
-        echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+        source_url="${{ inputs.nuget-source }}"
+        nuget_auth_token="$INPUT_NUGET_AUTH_TOKEN"
+        nuget_auth_username="$INPUT_NUGET_USERNAME"
+
+        if [[ "$source_url" == https://nuget.pkg.github.com/* ]]; then
+          if [ -z "$nuget_auth_token" ]; then
+            nuget_auth_token="$GITHUB_TOKEN_FALLBACK"
+          fi
+
+          if [ -z "$nuget_auth_username" ]; then
+            nuget_auth_username="$GITHUB_ACTOR_FALLBACK"
+          fi
+        fi
+
+        config_file="$RUNNER_TEMP/jekyllnet.nuget.config"
+        printf '<configuration />\n' > "$config_file"
+
+        if [ -n "$nuget_auth_token" ]; then
+          if [ -z "$nuget_auth_username" ]; then
+            echo "::error::nuget-username is required when nuget-auth-token is set."
+            exit 1
+          fi
+
+          dotnet nuget add source "$source_url" \
+            --name JekyllNet \
+            --configfile "$config_file" \
+            --username "$nuget_auth_username" \
+            --password "$nuget_auth_token" \
+            --store-password-in-clear-text
+        else
+          dotnet nuget add source "$source_url" \
+            --name JekyllNet \
+            --configfile "$config_file"
+        fi
+
+        operation=install
+
+        if dotnet tool list --global | tail -n +3 | awk '{ print tolower($1) }' | grep -Fxq 'jekyllnet'; then
+          operation=update
+        fi
 
         args=(
           tool
-          install
+          "$operation"
           --global
           JekyllNet
-          --add-source "${{ inputs.nuget-source }}"
+          --configfile "$config_file"
         )
 
         if [ -n "${{ inputs.tool-version }}" ]; then
