@@ -34,7 +34,7 @@ inputs:
   tool-version:
     description: JekyllNet dotnet tool version to install from NuGet.
     required: false
-    default: "0.2.0"
+    default: "0.2.5"
   nuget-source:
     description: NuGet feed used to install the JekyllNet dotnet tool.
     required: false

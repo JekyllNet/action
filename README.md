@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Build docs with JekyllNet
-        uses: JekyllNet/action@v2
+        uses: JekyllNet/action@v2.5
         with:
           source: ./docs
           destination: ./artifacts/docs-site
@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Build docs with JekyllNet from GitHub Packages
-        uses: JekyllNet/action@v2
+        uses: JekyllNet/action@v2.5
         with:
           source: ./docs
           nuget-source: https://nuget.pkg.github.com/JekyllNet/index.json
@@ -77,7 +77,7 @@ jobs:
 
 - The default .NET SDK is `10.0.x`.
 - The default NuGet source is `https://api.nuget.org/v3/index.json`.
-- The default `tool-version` is `0.2.0`, so `JekyllNet/action@v2` installs the matching CLI release unless you override it explicitly.
+- The default `tool-version` is `0.2.5`, so `JekyllNet/action@v2.5` installs the matching CLI release unless you override it explicitly.
 - The cache is enabled by default and stores NuGet packages plus the installed global tool between workflow runs.
 - If `tool-version` is pinned, an exact cache hit skips tool installation entirely.
 - If `tool-version` is empty, the action still checks for the latest version, but it restores package caches first to reduce repeated downloads.
