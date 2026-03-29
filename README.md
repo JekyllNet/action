@@ -1,5 +1,7 @@
 # JekyllNet GitHub Action
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 This repository hosts the standalone GitHub Action for building Jekyll-style static sites with `JekyllNet`.
 
 The action flow is:
